@@ -151,7 +151,11 @@ class DataGatherer(Thread):
             info['tenants'] = [x._info for x in keystone.tenants.list()]
         except AttributeError:
             log.info("Error getting tenants.list, continue with projects.list")
-            info['tenants'] = [x._info for x in keystone.projects.list()]
+
+            if 'OS_ENDPOINT_GROUP' in env:
+                info['tenants'] = [x._info for x in keystone.endpoint_filter.list_projects_for_endpoint_group(env['OS_ENDPOINT_GROUP'])]
+            else:
+                info['tenants'] = [x._info for x in keystone.projects.list()]
             log.debug("Number of projects: %s", len(info['tenants']))
         return info
 
