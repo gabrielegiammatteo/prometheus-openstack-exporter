@@ -18,6 +18,7 @@ swiftHosts=${swiftHosts:-host1.example.com host2.example.com}
 #keystoneTenantsMap="firstname,1234567890 secondname,0987654321"
 resellerPrefix=${resellerPrefix:-AUTH_}
 ringPath=${ringPath:-/etc/swift}
+tenantGroupFile=${tenantGroupFile:-"${prometheusDir}/tenant_group_file.conf"}
 #hashPathPrefix=
 #hashPathSuffix=
 
@@ -36,6 +37,7 @@ if [ ! -e "${configFile}" ]; then
     sed -i "s|VAR_SCHEDULABLE_INSTANCE_VCPU|${schedulableInstanceVcpu}|g" 	${configFile}
     sed -i "s|VAR_SCHEDULABLE_INSTANCE_DISK|${schedulableInstanceDisk}|g" 	${configFile}
     sed -i "s|VAR_USE_NOVA_VOLUMES|${useNovaVolumes}|g" 			${configFile}
+    sed -i "s|VAR_TENANT_GROUP_FILE|${tenantGroupFil}|g" 			${configFile}
 
     for i in ${enabledCollectors}; do
         sed -i "s/.*VAR_ENABLED_COLLECTORS/  - ${i}\n    - VAR_ENABLED_COLLECTORS/g" 	${configFile}

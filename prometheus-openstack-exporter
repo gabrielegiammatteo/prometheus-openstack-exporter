@@ -25,6 +25,8 @@ import argparse
 import yaml
 import json
 import ast
+import os
+import re
 from os import environ as env
 from os import rename, path
 import traceback
@@ -143,6 +145,7 @@ class DataGatherer(Thread):
         self.duration = 0
         self.refresh_interval = config.get('cache_refresh_interval', 900)
         self.cache_file = config['cache_file']
+        self.tenant_group_file = config.get('tenant_group_file', '/etc/prometheus/tenant_group_file.conf')
         self.use_nova_volumes = config.get('use_nova_volumes', True)
 
     def _get_keystone_info(self, keystone):
@@ -157,7 +160,33 @@ class DataGatherer(Thread):
             else:
                 info['tenants'] = [x._info for x in keystone.projects.list()]
             log.debug("Number of projects: %s", len(info['tenants']))
+
+        self.__add_tenant_group_info(info['tenants'])
+
         return info
+
+    def __add_tenant_group_info(self, tenants):
+        names = {}
+        if os.path.isfile(self.tenant_group_file):
+            with open(self.tenant_group_file, 'rb') as f:
+                for row in f.read().split('\n'):
+                    if row.startswith('#'):
+                        continue
+                    if (':' in row) or ('=' in row):
+                        delimter = ':|='
+                    else:
+                        delimter = '\ |,|\t'
+                    tokens = re.split(delimter, row, 1)
+                    if len(tokens) < 2:
+                        continue
+                    names[tokens[0].strip()] = tokens[1].strip()
+
+        for v in tenants:
+            if v['id'] in names:
+                v['group'] = names[v['id']]
+            else:
+                v['group'] = names.get(v['name'], 'unknown')
+
 
     def _get_neutron_info(self, neutron):
         info = {}
@@ -224,6 +253,7 @@ class DataGatherer(Thread):
             self.duration = time() - start_time
             sleep(self.refresh_interval)
 
+
     def get_stats(self):
         registry = CollectorRegistry()
         labels = ['cloud']
@@ -247,7 +277,7 @@ class Neutron():
         with open(config['cache_file'], 'rb') as f:
             self.prodstack = pickle.load(f)[0]
 
-        self.tenant_map = {t['id']: t['name'] for t in self.prodstack['tenants']}
+        self.tenant_map = {t['id']: (t['name'], t['group']) for t in self.prodstack['tenants']}
         self.network_map = {n['id']: n['name'] for n in self.prodstack['networks']}
         self.subnet_map = {
             n['id']: {'name': n['name'], 'pool': n['allocation_pools']} for n in self.prodstack['subnets']}
@@ -267,10 +297,11 @@ class Neutron():
         for ip in self.floating_ips:
             subnet = self.network_map[ip['floating_network_id']]
             try:
-                tenant = self.tenant_map[ip['tenant_id']]
+                tenant, tenant_group = self.tenant_map[ip['tenant_id']]
             except KeyError:
                 tenant = 'Unknown tenant ({})'.format(ip['tenant_id'])
-            key = (config['cloud'], subnet, tenant, 'floatingip', ip['status'])
+                tenant_group = 'unknown'
+            key = (config['cloud'], subnet, tenant, tenant_group, 'floatingip', ip['status'])
             if key in ips:
                 ips[key] += 1
             else:
@@ -284,11 +315,12 @@ class Neutron():
                 if r['tenant_id'].startswith('<Tenant {'):
                     r['tenant_id'] = ast.literal_eval(r['tenant_id'][8:-1])['id']
                 try:
-                    tenant = self.tenant_map[r['tenant_id']]
+                    tenant, tenant_group = self.tenant_map[r['tenant_id']]
                 except KeyError:
                     tenant = 'Unknown tenant ({})'.format(r['tenant_id'])
+                    tenant_group = 'unknown'
                 subnet = self.network_map[r['external_gateway_info']['network_id']]
-                key = (config['cloud'], subnet, tenant, 'routerip', r['status'])
+                key = (config['cloud'], subnet, tenant, tenant_group, 'routerip', r['status'])
                 if key in ips:
                     ips[key] += 1
                 else:
@@ -313,7 +345,7 @@ class Neutron():
             net_size.labels(*label_values).set(size)
 
     def get_stats(self):
-        labels = ['cloud', 'subnet_name', 'tenant', 'ip_type', 'ip_status']
+        labels = ['cloud', 'subnet_name', 'tenant', 'tenant_group', 'ip_type', 'ip_status']
         ips = self.get_floating_ips()
         ips.update(self.get_router_ips())
         metrics = Gauge('neutron_public_ip_usage',
@@ -331,26 +363,27 @@ class Cinder():
         self.prodstack = {}
         with open(config['cache_file'], 'rb') as f:
             self.prodstack = pickle.load(f)[0]
-        self.tenant_map = {t['id']: t['name'] for t in self.prodstack['tenants']}
+        self.tenant_map = {t['id']: (t['name'], t['group']) for t in self.prodstack['tenants']}
         self.use_nova_volumes = config.get('use_nova_volumes', True)
 
     def gen_volume_quota_stats(self):
         gbs = Gauge('cinder_quota_volume_disk_gigabytes',
                     'Cinder volume metric (GB)',
-                    ['cloud', 'tenant', 'type'], registry=self.registry)
+                    ['cloud', 'tenant', 'tenant_group', 'type'], registry=self.registry)
         vol = Gauge('cinder_quota_volume_disks',
                     'Cinder volume metric (number of volumes)',
-                    ['cloud', 'tenant', 'type'], registry=self.registry)
+                    ['cloud', 'tenant', 'tenant_group', 'type'], registry=self.registry)
         if not self.use_nova_volumes:
             return
         for t, q in self.prodstack['volume_quotas'].items():
             if t in self.tenant_map:
-                tenant = self.tenant_map[t]
+                tenant, tenant_group = self.tenant_map[t]
             else:
                 tenant = 'orphaned'
+                tenant_group = 'unknown'
             for tt in ['limit', 'in_use', 'reserved']:
-                gbs.labels(config['cloud'], tenant, tt).inc(q['gigabytes'][tt])
-                vol.labels(config['cloud'], tenant, tt).inc(q['volumes'][tt])
+                gbs.labels(config['cloud'], tenant, tenant_group,  tt).inc(q['gigabytes'][tt])
+                vol.labels(config['cloud'], tenant, tenant_group, tt).inc(q['volumes'][tt])
 
     def get_stats(self):
         self.gen_volume_quota_stats()
@@ -364,7 +397,7 @@ class Nova():
         with open(config['cache_file'], 'rb') as f:
             self.prodstack = pickle.load(f)[0]
         self.hypervisors = self.prodstack['hypervisors']
-        self.tenant_map = {t['id']: t['name'] for t in self.prodstack['tenants']}
+        self.tenant_map = {t['id']: (t['name'], t['group']) for t in self.prodstack['tenants']}
         self.flavor_map = {f['id']: {'ram': f['ram'], 'disk': f['disk'], 'vcpus': f['vcpus']}
                            for f in self.prodstack['flavors']}
         self.aggregate_map = {}
@@ -447,28 +480,30 @@ class Nova():
         missing_flavors = False
         instances = Gauge('nova_instances',
                           'Nova instances metrics',
-                          ['cloud', 'tenant', 'instance_state'], registry=self.registry)
+                          ['cloud', 'tenant', 'tenant_group', 'instance_state'], registry=self.registry)
         res_ram = Gauge('nova_resources_ram_mbs',
                         'Nova RAM usage metric',
-                        ['cloud', 'tenant'], registry=self.registry)
+                        ['cloud', 'tenant', 'tenant_group'], registry=self.registry)
         res_vcpus = Gauge('nova_resources_vcpus',
                           'Nova vCPU usage metric',
-                          ['cloud', 'tenant'], registry=self.registry)
+                          ['cloud', 'tenant', 'tenant_group'], registry=self.registry)
         res_disk = Gauge('nova_resources_disk_gbs',
                          'Nova disk usage metric',
-                         ['cloud', 'tenant'], registry=self.registry)
+                         ['cloud', 'tenant', 'tenant_group'], registry=self.registry)
         for i in self.prodstack['instances']:
             if i['tenant_id'] in self.tenant_map:
-                tenant = self.tenant_map[i['tenant_id']]
+                tenant, tenant_group = self.tenant_map[i['tenant_id']]
             else:
                 tenant = 'orphaned'
-            instances.labels(config['cloud'], tenant, i['status']).inc()
+                tenant_group = 'unknown'
+
+            instances.labels(config['cloud'], tenant, tenant_group, i['status']).inc()
 
             if i['flavor']['id'] in self.flavor_map:
                 flavor = self.flavor_map[i['flavor']['id']]
-                res_ram.labels(config['cloud'], tenant).inc(flavor['ram'])
-                res_vcpus.labels(config['cloud'], tenant).inc(flavor['vcpus'])
-                res_disk.labels(config['cloud'], tenant).inc(flavor['disk'])
+                res_ram.labels(config['cloud'], tenant, tenant_group).inc(flavor['ram'])
+                res_vcpus.labels(config['cloud'], tenant, tenant_group).inc(flavor['vcpus'])
+                res_disk.labels(config['cloud'], tenant, tenant_group).inc(flavor['disk'])
             else:
                 missing_flavors = True
 
@@ -498,34 +533,35 @@ class Nova():
     def gen_quota_stats(self):
         cores = Gauge('nova_quota_cores',
                       'Nova cores metric',
-                      ['cloud', 'tenant', 'type'], registry=self.registry)
+                      ['cloud', 'tenant', 'tenant_group', 'type'], registry=self.registry)
         fips = Gauge('nova_quota_floating_ips',
                      'Nova floating IP addresses (number)',
-                     ['cloud', 'tenant', 'type'], registry=self.registry)
+                     ['cloud', 'tenant', 'tenant_group', 'type'], registry=self.registry)
         inst = Gauge('nova_quota_instances',
                      'Nova instances (number)',
-                     ['cloud', 'tenant', 'type'], registry=self.registry)
+                     ['cloud', 'tenant', 'tenant_group', 'type'], registry=self.registry)
         ram = Gauge('nova_quota_ram_mbs',
                     'Nova RAM (MB)',
-                    ['cloud', 'tenant', 'type'], registry=self.registry)
+                    ['cloud', 'tenant', 'tenant_group', 'type'], registry=self.registry)
         for t, q in self.prodstack['nova_quotas'].items():
             if t in self.tenant_map:
-                tenant = self.tenant_map[t]
+                tenant, tenant_group = self.tenant_map[t]
             else:
                 tenant = 'orphaned'
+                tenant_group = 'unknown'
 
             # we get detailed quota information only on recent OS versions
             if isinstance(q['cores'], int):
-                cores.labels(config['cloud'], tenant, 'limit').set(q['cores'])
-                fips.labels(config['cloud'], tenant, 'limit').set(q['floating_ips'])
-                inst.labels(config['cloud'], tenant, 'limit').set(q['instances'])
-                ram.labels(config['cloud'], tenant, 'limit').set(q['ram'])
+                cores.labels(config['cloud'], tenant, tenant_group, 'limit').set(q['cores'])
+                fips.labels(config['cloud'], tenant, tenant_group, 'limit').set(q['floating_ips'])
+                inst.labels(config['cloud'], tenant, tenant_group, 'limit').set(q['instances'])
+                ram.labels(config['cloud'], tenant, tenant_group, 'limit').set(q['ram'])
             else:
                 for tt in ['limit', 'in_use', 'reserved']:
-                    cores.labels(config['cloud'], tenant, tt).inc(q['cores'][tt])
-                    fips.labels(config['cloud'], tenant, tt).inc(q['floating_ips'][tt])
-                    inst.labels(config['cloud'], tenant, tt).inc(q['instances'][tt])
-                    ram.labels(config['cloud'], tenant, tt).inc(q['ram'][tt])
+                    cores.labels(config['cloud'], tenant, tenant_group, tt).inc(q['cores'][tt])
+                    fips.labels(config['cloud'], tenant, tenant_group, tt).inc(q['floating_ips'][tt])
+                    inst.labels(config['cloud'], tenant, tenant_group, tt).inc(q['instances'][tt])
+                    ram.labels(config['cloud'], tenant, tenant_group, tt).inc(q['ram'][tt])
 
     def get_stats(self):
         log.debug("get_stats")
@@ -767,6 +803,7 @@ def handler(*args, **kwargs):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     parser = argparse.ArgumentParser(usage=__doc__,
                                      description='Prometheus OpenStack exporter',
                                      formatter_class=argparse.RawTextHelpFormatter)
