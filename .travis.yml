@@ -14,12 +14,12 @@ env:
     - secure: trUUB49tDoK4zZi77A/jyu/EMUCGerlGq+tUlq3duTJWylVu3Vb3tSoiTFoxoSvjRAnUu+s2iTaWHvMvRFIueacRLt1vlvdHm6IA4IkaNajJWEUyV0fgQs3vX+V9Z6Z2IX6tGiEWwFDgwuSuFpJ+zG9/4qB8+Kd8SX3Ui8vue53LTnAgmQBsocVYlTQ80+SSY2xIkqAYS5Af0ojWfS0ipGWNpRL8SkVae32zOZ6lpkNMTDnnMZp3wO4Sm465f84JL/KzxlqR9Se8ALY+SI3bkzRhTKUbwUCyYOdobXgDnsO3m/C2a3EttzQvxuzByHuBphQhhyN5FUBSnexsVlV1LMa5ZcP2IUb9yj2C4FN2PYaSqlnM23wdno1UkAHESlZJSXfzVBTyGYcwYTZ74Ez9Ab1ExYJoVjNOIQp3mbQd2Q59turmyQ4UGDy4IisKXtIcqRh5NswE75kEo/zRDvpiZzbtWhq7HW9gEx3SHM/sWzHYdJKzoSU2nG1i2Zazm129Pu1yqce73AmICCu/zK8cDqdJ998qiiAXtUsCsG/eOuXXettC0YV/dP1EF3mlfvD7c6XuKaW+EMwHN6NudR2yemtdCBDiROn8PMzMRZbF/WHRARZWVlUTpvwLpk7MGdtQEJl+mYY0sxgIKmDOcCmhoJCKLWSzraZlBs6fXlDVVL4=
 
 before_deploy:
-  - version=$(sed -nE "s/version='(.*)'.*/\1/p" setup.py | tr -d '[:space:]')
+  #- version=$(sed -nE "s/version='(.*)'.*/\1/p" setup.py | tr -d '[:space:]')
   - docker pull "${IMAGE_NAME}:develop" || true
   - docker build --pull --cache-from "${IMAGE_NAME}:develop" --tag "$IMAGE_NAME" .
   - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
   - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:develop"
-  - docker tag "$IMAGE_NAME" "${IMAGE_NAME}:${version}"
+  #- docker tag "$IMAGE_NAME" "${IMAGE_NAME}:${version}"
 
 deploy:
 

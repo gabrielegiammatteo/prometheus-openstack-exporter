@@ -823,7 +823,4 @@ if __name__ == '__main__':
         data_gatherer = DataGatherer()
         data_gatherer.start()
     server = ForkingHTTPServer(('', config.get('listen_port')), handler)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        server.server_close()
+    server.serve_forever()
