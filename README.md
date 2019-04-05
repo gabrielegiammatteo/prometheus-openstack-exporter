@@ -1,3 +1,8 @@
+## Important
+
+This version has been customized to fits the FIWARE infrastructrue monitoring (in particular the Vicenza node). It adds support for fetching data for a single region and assign a group to each tenant (statically loaded from a confifguration file)
+
+
 # Prometheus OpenStack exporter
 
 Exposes high level [OpenStack](http://www.openstack.org/) metrics to [Prometheus](https://prometheus.io/).
