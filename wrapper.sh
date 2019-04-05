@@ -37,7 +37,7 @@ if [ ! -e "${configFile}" ]; then
     sed -i "s|VAR_SCHEDULABLE_INSTANCE_VCPU|${schedulableInstanceVcpu}|g" 	${configFile}
     sed -i "s|VAR_SCHEDULABLE_INSTANCE_DISK|${schedulableInstanceDisk}|g" 	${configFile}
     sed -i "s|VAR_USE_NOVA_VOLUMES|${useNovaVolumes}|g" 			${configFile}
-    sed -i "s|VAR_TENANT_GROUP_FILE|${tenantGroupFil}|g" 			${configFile}
+    sed -i "s|VAR_TENANT_GROUP_FILE|${tenantGroupFile}|g" 			${configFile}
 
     for i in ${enabledCollectors}; do
         sed -i "s/.*VAR_ENABLED_COLLECTORS/  - ${i}\n    - VAR_ENABLED_COLLECTORS/g" 	${configFile}
