@@ -184,6 +184,7 @@ class DataGatherer(Thread):
         else:
             log.debug('groups file %s not found', self.tenant_group_file)
 
+        log.debug("Groups loaded: %s", names)
         for v in tenants:
             if v['id'] in names:
                 v['group'] = names[v['id']]
@@ -453,11 +454,8 @@ class Nova():
             return val
 
         for h in self.hypervisors:
-            log.debug("Hypervisor: %s", h)
             host = h['service']['host']
-            log.debug("host: %s", host)
             cpu_info = h['cpu_info']
-            log.debug("cpu_info: %s", cpu_info)
             arch = 'Unknown'
             if not cpu_info:
                 log.info("Could not get cpu info")
