@@ -385,6 +385,8 @@ class Cinder():
             else:
                 tenant = 'orphaned'
                 tenant_group = 'unknown'
+                log.warning('Tenant with id=%s not mapped', t)
+
             for tt in ['limit', 'in_use', 'reserved']:
                 gbs.labels(config['cloud'], tenant, tenant_group,  tt).inc(q['gigabytes'][tt])
                 vol.labels(config['cloud'], tenant, tenant_group, tt).inc(q['volumes'][tt])
@@ -497,6 +499,7 @@ class Nova():
             else:
                 tenant = 'orphaned'
                 tenant_group = 'unknown'
+                log.warning('Tenant with id=%s not mapped', i['tenant_id'])
 
             instances.labels(config['cloud'], tenant, tenant_group, i['status']).inc()
 
@@ -550,6 +553,7 @@ class Nova():
             else:
                 tenant = 'orphaned'
                 tenant_group = 'unknown'
+                log.warning('Tenant with id=%s not mapped', t)
 
             # we get detailed quota information only on recent OS versions
             if isinstance(q['cores'], int):
