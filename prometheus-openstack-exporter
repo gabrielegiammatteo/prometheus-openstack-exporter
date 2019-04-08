@@ -168,6 +168,7 @@ class DataGatherer(Thread):
     def __add_tenant_group_info(self, tenants):
         names = {}
         if os.path.isfile(self.tenant_group_file):
+            log.debug('Loading groups file from %s', self.tenant_group_file)
             with open(self.tenant_group_file, 'rb') as f:
                 for row in f.read().split('\n'):
                     if row.startswith('#'):
@@ -180,6 +181,8 @@ class DataGatherer(Thread):
                     if len(tokens) < 2:
                         continue
                     names[tokens[0].strip()] = tokens[1].strip()
+        else:
+            log.debug('groups file %s not found', self.tenant_group_file)
 
         for v in tenants:
             if v['id'] in names:
