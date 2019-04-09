@@ -383,7 +383,7 @@ class Cinder():
             if t in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[t]
             else:
-                tenant = 'orphaned'
+                tenant = 'unknown'
                 tenant_group = 'unknown'
                 log.warning('Tenant with id=%s not mapped', t)
 
@@ -497,7 +497,7 @@ class Nova():
             if i['tenant_id'] in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[i['tenant_id']]
             else:
-                tenant = 'orphaned'
+                tenant = 'unknown'
                 tenant_group = 'unknown'
                 log.warning('Tenant with id=%s not mapped', i['tenant_id'])
 
@@ -551,7 +551,7 @@ class Nova():
             if t in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[t]
             else:
-                tenant = 'orphaned'
+                tenant = 'unknown'
                 tenant_group = 'unknown'
                 log.warning('Tenant with id=%s not mapped', t)
 
