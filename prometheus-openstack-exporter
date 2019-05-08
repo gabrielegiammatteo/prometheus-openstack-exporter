@@ -184,7 +184,7 @@ class DataGatherer(Thread):
         else:
             log.debug('groups file %s not found', self.tenant_group_file)
 
-        log.debug("Groups loaded: %s", names)
+        log.debug("Groups loaded: %s", len(names.keys()))
         for v in tenants:
             if v['id'] in names:
                 v['group'] = names[v['id']]
@@ -480,7 +480,6 @@ class Nova():
                 schedulable_instances_capacity.labels(*label_values).set(self._get_schedulable_instances_capacity(h))
 
     def gen_instance_stats(self):
-        missing_flavors = False
         instances = Gauge('nova_instances',
                           'Nova instances metrics',
                           ['cloud', 'tenant', 'tenant_group', 'instance_state'], registry=self.registry)
@@ -493,6 +492,9 @@ class Nova():
         res_disk = Gauge('nova_resources_disk_gbs',
                          'Nova disk usage metric',
                          ['cloud', 'tenant', 'tenant_group'], registry=self.registry)
+        missing_flavors = Gauge('nova_missing_flavors',
+                         'missing flavors referenced by existing VMs',
+                         ['cloud', 'tenant', 'tenant_group', 'flavor_id'], registry=self.registry)
         for i in self.prodstack['instances']:
             if i['tenant_id'] in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[i['tenant_id']]
@@ -509,19 +511,7 @@ class Nova():
                 res_vcpus.labels(config['cloud'], tenant, tenant_group).inc(flavor['vcpus'])
                 res_disk.labels(config['cloud'], tenant, tenant_group).inc(flavor['disk'])
             else:
-                missing_flavors = True
-
-        # If flavors were deleted we can't reliably find out resouerce use
-        if missing_flavors:
-            self.registry.unregister(res_ram)
-            self.registry.unregister(res_vcpus)
-            self.registry.unregister(res_disk)
-            res_ram = Gauge('nova_resources_ram_mbs', 'Nova RAM usage metric unavailable, missing flavors',
-                            [], registry=self.registry)
-            res_vcpus = Gauge('nova_resources_vcpus', 'Nova vCPU usage metric unavailable, missing flavors',
-                              [], registry=self.registry)
-            res_disk = Gauge('nova_resources_disk_gbs', 'Nova disk usage metric unavailable, missing flavors',
-                             [], registry=self.registry)
+                missing_flavors.labels(config['cloud'], tenant, tenant_group, i['flavor']['id']).inc(1)
 
     def gen_overcommit_stats(self):
         labels = ['cloud', 'resource']
