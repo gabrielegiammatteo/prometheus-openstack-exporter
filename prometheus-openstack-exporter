@@ -303,7 +303,7 @@ class Neutron():
             try:
                 tenant, tenant_group = self.tenant_map[ip['tenant_id']]
             except KeyError:
-                tenant = 'Unknown tenant ({})'.format(ip['tenant_id'])
+                tenant = 'unknown ({})'.format(ip['tenant_id'])
                 tenant_group = 'unknown'
             key = (config['cloud'], subnet, tenant, tenant_group, 'floatingip', ip['status'])
             if key in ips:
@@ -321,7 +321,7 @@ class Neutron():
                 try:
                     tenant, tenant_group = self.tenant_map[r['tenant_id']]
                 except KeyError:
-                    tenant = 'Unknown tenant ({})'.format(r['tenant_id'])
+                    tenant = 'unknown ({})'.format(r['tenant_id'])
                     tenant_group = 'unknown'
                 subnet = self.network_map[r['external_gateway_info']['network_id']]
                 key = (config['cloud'], subnet, tenant, tenant_group, 'routerip', r['status'])
@@ -383,9 +383,9 @@ class Cinder():
             if t in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[t]
             else:
-                tenant = 'unknown'
+                tenant = 'unknown ({0})'.format(t)
                 tenant_group = 'unknown'
-                log.warning('Tenant with id=%s not mapped', t)
+                log.warning('Tenant with id=%s not knwon', t)
 
             for tt in ['limit', 'in_use', 'reserved']:
                 gbs.labels(config['cloud'], tenant, tenant_group,  tt).inc(q['gigabytes'][tt])
@@ -499,9 +499,9 @@ class Nova():
             if i['tenant_id'] in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[i['tenant_id']]
             else:
-                tenant = 'unknown'
+                tenant = 'unknown ({0})'.format(i['tenant_id'])
                 tenant_group = 'unknown'
-                log.warning('Tenant with id=%s not mapped', i['tenant_id'])
+                log.warning('Tenant with id=%s not known', i['tenant_id'])
 
             instances.labels(config['cloud'], tenant, tenant_group, i['status']).inc()
 
@@ -541,9 +541,9 @@ class Nova():
             if t in self.tenant_map:
                 tenant, tenant_group = self.tenant_map[t]
             else:
-                tenant = 'unknown'
+                tenant = 'unknown ({0})'.format(t)
                 tenant_group = 'unknown'
-                log.warning('Tenant with id=%s not mapped', t)
+                log.warning('Tenant with id=%s not known', t)
 
             # we get detailed quota information only on recent OS versions
             if isinstance(q['cores'], int):
